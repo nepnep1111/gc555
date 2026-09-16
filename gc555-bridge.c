@@ -31,6 +31,7 @@
 #define GC555_BRIDGE_RESET_MASK		(BIT(0) | BIT(8) | BIT(9))
 #define GC555_BRIDGE_IRQ_STATUS_MASK	0x1fff
 #define GC555_BRIDGE_GC555_IRQ_ENABLE	0x1b33
+#define GC555_BRIDGE_GC573_IRQ_ENABLE	0x0b33
 #define GC555_BRIDGE_GC555_IRQ_MIN_VERSION	0x19081601
 #define GC555_BRIDGE_I2C_BUS_KHZ	400U
 #define GC555_BRIDGE_I2C_CLOCK_KHZ	125000U
@@ -459,6 +460,12 @@ int gc555_bridge_restore_host_irq_routing(struct gc555_dev *gc555)
 	return gc555_bridge_set_host_irq_routing(gc555, true);
 }
 
+static unsigned int gc555_irq_enable_mask(struct gc555_dev *gc555)
+{
+	return gc555->model == GC555_MODEL_GC573 ?
+	       GC555_BRIDGE_GC573_IRQ_ENABLE : GC555_BRIDGE_GC555_IRQ_ENABLE;
+}
+
 int gc555_bridge_set_host_irq_routing(struct gc555_dev *gc555, bool enable)
 {
 	u32 routing;
@@ -489,17 +496,20 @@ int gc555_bridge_set_host_irq_routing(struct gc555_dev *gc555, bool enable)
 
 	if (enable && version >= GC555_BRIDGE_GC555_IRQ_MIN_VERSION) {
 		ret = gc555_bridge_write(gc555, GC555_BRIDGE_REG_IRQ_ENABLE,
-					 GC555_BRIDGE_GC555_IRQ_ENABLE);
+					 gc555_irq_enable_mask(gc555));
 		if (ret)
 			return ret;
 	}
 
 	if (version >= GC555_BRIDGE_GC555_IRQ_MIN_VERSION) {
+		unsigned int expected = enable ?
+					gc555_irq_enable_mask(gc555) : 0;
+
 		ret = gc555_bridge_read(gc555, GC555_BRIDGE_REG_IRQ_ENABLE,
 					&routing);
 		if (ret)
 			return ret;
-		if (routing != (enable ? GC555_BRIDGE_GC555_IRQ_ENABLE : 0))
+		if (routing != expected)
 			return -EIO;
 	}
 	if (enable)

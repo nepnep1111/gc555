@@ -13,7 +13,8 @@
 #define GC555_PCI_VENDOR_ID		0x1461
 #define GC555_PCI_DEVICE_ID		0x0054
 #define GC555_PCI_SUBVENDOR_ID		0x1461
-#define GC555_PCI_SUBDEVICE_ID		0x5550
+#define GC555_PCI_SUBDEVICE_GC555	0x5550
+#define GC555_PCI_SUBDEVICE_GC573	0x5730
 #define GC555_BRIDGE_BAR		0
 #define GC555_INPUT_EDID_SIZE		256
 
@@ -106,6 +107,7 @@ static int gc555_probe(struct pci_dev *pdev,
 
 	gc555->dev = &pdev->dev;
 	gc555->pdev = pdev;
+	gc555->model = id->driver_data;
 	pci_set_drvdata(pdev, gc555);
 	pci_set_master(pdev);
 
@@ -126,10 +128,17 @@ static int gc555_probe(struct pci_dev *pdev,
 	if (ret)
 		goto cleanup_fpga;
 
-	ret = gc555_led_init(gc555);
-	if (ret)
-		dev_warn(gc555->dev,
-			 "RGB lighting unavailable: %d\n", ret);
+	/*
+	 * The 26-LED SLED1735 lighting chain is GC555-specific; the GC573
+	 * lighting hardware and mapping have not been established, so leave
+	 * it untouched.
+	 */
+	if (gc555->model == GC555_MODEL_GC555) {
+		ret = gc555_led_init(gc555);
+		if (ret)
+			dev_warn(gc555->dev,
+				 "RGB lighting unavailable: %d\n", ret);
+	}
 
 	ret = gc555_it6664_init(gc555);
 	if (ret)
@@ -164,7 +173,10 @@ static int gc555_probe(struct pci_dev *pdev,
 		goto quiesce_video;
 
 	dev_info(&pdev->dev,
-		 "hardware transport, HDMI chips, and capture endpoints initialized\n");
+		 "AVerMedia model %u (%s) initialized\n",
+		 gc555->model,
+		 gc555->model == GC555_MODEL_GC573 ?
+			"Live Gamer 4K GC573" : "Live Gamer BOLT GC555");
 	return 0;
 
 quiesce_video:
@@ -319,7 +331,11 @@ static DEFINE_SIMPLE_DEV_PM_OPS(gc555_pm_ops, gc555_suspend, gc555_resume);
 
 static const struct pci_device_id gc555_pci_ids[] = {
 	{ PCI_DEVICE_SUB(GC555_PCI_VENDOR_ID, GC555_PCI_DEVICE_ID,
-			 GC555_PCI_SUBVENDOR_ID, GC555_PCI_SUBDEVICE_ID) },
+			 GC555_PCI_SUBVENDOR_ID, GC555_PCI_SUBDEVICE_GC555),
+	  .driver_data = GC555_MODEL_GC555 },
+	{ PCI_DEVICE_SUB(GC555_PCI_VENDOR_ID, GC555_PCI_DEVICE_ID,
+			 GC555_PCI_SUBVENDOR_ID, GC555_PCI_SUBDEVICE_GC573),
+	  .driver_data = GC555_MODEL_GC573 },
 	{ }
 };
 MODULE_DEVICE_TABLE(pci, gc555_pci_ids);
@@ -333,5 +349,5 @@ static struct pci_driver gc555_pci_driver = {
 };
 module_pci_driver(gc555_pci_driver);
 
-MODULE_DESCRIPTION("AVerMedia Live Gamer BOLT GC555 capture driver");
+MODULE_DESCRIPTION("AVerMedia Live Gamer BOLT GC555 / Live Gamer 4K GC573 capture driver");
 MODULE_LICENSE("GPL");
