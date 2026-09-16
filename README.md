@@ -1,13 +1,22 @@
-# AVerMedia Live Gamer BOLT GC555 Linux driver
+# AVerMedia Live Gamer BOLT GC555 / Live Gamer 4K GC573 Linux driver
 
 This repository contains a Linux kernel driver for the AVerMedia Live Gamer
-BOLT GC555 Thunderbolt capture device. It provides V4L2 video capture, ALSA
-audio capture, and HDMI passthrough. The kernel module is built entirely from
-source and does not depend on AVerMedia's proprietary kernel objects.
+BOLT GC555 Thunderbolt capture device and the AVerMedia Live Gamer 4K GC573
+PCIe capture device. It provides V4L2 video capture and ALSA audio capture on
+both cards, and HDMI passthrough on the GC555. The kernel module is built
+entirely from source and does not depend on AVerMedia's proprietary kernel
+objects.
 
-Only the GC555 is supported. Other AVerMedia capture devices are not supported.
+The GC555 and GC573 share the same board design, FPGA, and ITE HDMI chip
+register maps. The GC573 replaces the IT6805 receiver with an IT68051TE and
+the IT6664 splitter with an IT6663FN. Both are recognized by the same
+identity checks, and the single module drives either card based on the PCI
+subsystem ID. GC573 support is capture-only: the driver leaves the GC573's
+splitter TX ports powered down and does not touch its lighting hardware.
 
-## Supported and tested
+## Supported and tested on the GC555
+
+The following was validated on GC555 hardware:
 
 - Native-resolution V4L2 capture. Validated input modes include 480p, 576p,
   1080p240, 1440p144, 3440x1440p100, 3840x2160p60, and common PC resolutions.
@@ -29,6 +38,22 @@ Only the GC555 is supported. Other AVerMedia capture devices are not supported.
 - Module reload, suspend and resume with the device retained, and Thunderbolt
   surprise removal.
 
+## Supported and tested on the GC573
+
+The following was validated on GC573 hardware:
+
+- 3840x2160p60 `YUYV` V4L2 capture.
+- Stereo 48 kHz `S16_LE` HDMI audio capture.
+- HDR10 capture as `P010`, preserving the source's color container (BT.709
+  or BT.2020) with PQ transfer, streamed via `v4l2-ctl` and `ffmpeg`.
+- The FPGA host-IRQ routing is programmed with and verified against the
+  GC573-specific enable mask `0xb33`.
+- Module unload after capture use.
+
+The remaining GC555-validated paths above, including HDMI passthrough, the
+3.5 mm line input, RGB lighting, and the listed output formats and input
+modes, have not been validated on the GC573.
+
 ## Implemented but not yet tested
 
 The following paths are present in the driver but have not been validated with
@@ -43,6 +68,8 @@ physical hardware:
 
 ## Not supported
 
+- HDMI passthrough on the GC573. The splitter TX state machine is not
+  started on this model, so the HDMI OUT ports have no output.
 - Changing between RGB and YCbCr sampling while a capture stream is running.
 - `UYVY` video output.
 - Host audio capture other than two-, six-, or eight-channel `S16_LE` or
@@ -91,6 +118,7 @@ PCIe serial number:
 
 ```text
 /dev/v4l/by-id/pci-AVerMedia_Live_Gamer_BOLT_GC555_<serial>-video-index0
+/dev/v4l/by-id/pci-AVerMedia_Live_Gamer_4K_GC573_<serial>-video-index0
 ```
 
 Close all video and audio clients before unloading the module:
